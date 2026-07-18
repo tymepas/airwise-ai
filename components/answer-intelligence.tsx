@@ -79,6 +79,11 @@ export function AnswerIntelligence({ explainability, evidence = [], liveData, pr
                 </summary>
                 <p className="mt-4 text-sm leading-relaxed text-slate-600">{item.excerpt}</p>
                 <p className="mt-3 text-xs font-semibold text-slate-400">Why used: {item.relevance}</p>
+                {item.matchedConcepts.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Matched concepts: {item.matchedConcepts.join(", ")}
+                  </p>
+                )}
               </details>
             ))}
           </div>

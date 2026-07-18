@@ -55,7 +55,10 @@ export async function POST(request: Request) {
     // never prevent a guidance-only answer.
     const [liveAqi, retrieval] = await Promise.all([
       getLiveAqi(location).catch(() => null),
-      retrieveGuidelines(message, context.history.map((turn) => `${turn.question} ${turn.reason}`).join("\n")),
+      retrieveGuidelines(message, {
+        conversationContext: context.history.map((turn) => `${turn.question} ${turn.reason}`).join("\n"),
+        profile: context.profile,
+      }),
     ]);
     const answer = await generateHealthAnswer(message, retrieval.documents, liveAqi, context);
 

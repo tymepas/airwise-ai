@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "evaluate:retrieval": "node scripts/evaluate-retrieval.mjs"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^9.4.2",

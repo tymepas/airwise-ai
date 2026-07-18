@@ -17,6 +17,9 @@ export interface EvidenceItem {
   title: string;
   excerpt: string;
   relevance: string;
+  matchedBecause: string[];
+  matchedConcepts: string[];
+  relevanceScore: number;
 }
 
 export interface ChatRequestContext {

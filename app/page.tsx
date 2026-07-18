@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnswerIntelligence } from '@/components/answer-intelligence';
 import { HealthProfileCard } from '@/components/health-profile-card';
 import { LiveAqiCard } from '@/components/live-aqi-card';
-import type { AqiLocation } from '@/lib/aqi-types';
-import type { ChatRequestContext, EvidenceItem, Explainability } from '@/lib/chat-types';
+import { ProvenanceExplorer } from '@/components/provenance-explorer';
+import type { AqiLocation, LiveAqiProvenance } from '@/lib/aqi-types';
+import type { AiReasoningProvenance, ChatRequestContext, EvidenceItem, Explainability, RetrievalDebugInfo } from '@/lib/chat-types';
 import type { HealthProfile } from '@/lib/health-profile';
 import { normalizeHealthProfile } from '@/lib/health-profile';
 
@@ -27,7 +28,10 @@ interface ChatResponse {
       humidity: number | null;
       windSpeed: number | null;
     };
+    provenance: LiveAqiProvenance;
   } | null;
+  reasoning?: AiReasoningProvenance;
+  retrievalDebug?: RetrievalDebugInfo;
   error?: string;
 }
 
@@ -89,6 +93,7 @@ export default function Home() {
   const [location, setLocation] = useState<AqiLocation>({ city: 'Delhi' });
   const [profile, setProfile] = useState<HealthProfile>({ selections: [] });
   const [history, setHistory] = useState<ChatRequestContext['history']>([]);
+  const [developerMode, setDeveloperMode] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -132,6 +137,7 @@ export default function Home() {
           location,
           profile,
           history,
+          developerMode,
         }),
       });
 
@@ -276,6 +282,10 @@ export default function Home() {
           <p className="text-xs text-slate-400 text-center sm:text-left">
             Press Cmd or Ctrl plus Enter to ask quickly
           </p>
+          <label className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 sm:ml-auto">
+            <input type="checkbox" checked={developerMode} onChange={(event) => setDeveloperMode(event.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-300" />
+            Developer mode
+          </label>
         </div>
 
         {loading && (
@@ -376,6 +386,13 @@ export default function Home() {
             evidence={result.evidence}
             liveData={result.liveData}
             profile={profile}
+          />
+
+          <ProvenanceExplorer
+            liveData={result.liveData}
+            evidence={result.evidence}
+            reasoning={result.reasoning}
+            debug={result.retrievalDebug}
           />
 
           {result.sources && result.sources.length > 0 && (

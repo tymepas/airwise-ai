@@ -39,4 +39,19 @@ export interface LiveAqi {
   dataSource: "Open-Meteo / CAMS";
   timeline: AqiTimelinePoint[];
   healthScore: AirHealthScore;
+  provenance: LiveAqiProvenance;
+}
+
+export interface LiveAqiProvenance {
+  provider: "Open-Meteo Air Quality API";
+  weatherProvider: "Open-Meteo Weather API";
+  airQualityModel: "CAMS";
+  retrievedAt: string;
+  responseTimestamp: string;
+  latitude: number;
+  longitude: number;
+  updateFrequency: "Up to every 5 minutes";
+  status: "Live";
+  airQualityEndpoint: string;
+  weatherEndpoint: string;
 }

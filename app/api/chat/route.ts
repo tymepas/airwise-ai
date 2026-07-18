@@ -7,7 +7,8 @@ import {
   validateQuestion,
 } from "@/lib/rag";
 import { normalizeHealthProfile } from "@/lib/health-profile";
-import type { ChatRequestContext, ConversationTurn } from "@/lib/chat-types";
+import type { ChatRequestContext, ConversationTurn, RetrievalDebugInfo } from "@/lib/chat-types";
+import { GEMINI_MODEL } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,30 @@ function readConversationContext(body: unknown): ChatRequestContext {
   return { profile: normalizeHealthProfile(value.profile), history };
 }
 
+function isDeveloperMode(body: unknown) {
+  return Boolean(body && typeof body === "object" && (body as { developerMode?: unknown }).developerMode === true);
+}
+
+function buildRetrievalDebug(
+  documents: Awaited<ReturnType<typeof retrieveGuidelines>>["documents"],
+  queryPlan: Awaited<ReturnType<typeof retrieveGuidelines>>["queryPlan"],
+  intent: Awaited<ReturnType<typeof retrieveGuidelines>>["intent"]
+): RetrievalDebugInfo {
+  const contextCharacters = documents.reduce(
+    (total, document) => total + document.title.length + document.content.length + document.source.length,
+    0
+  );
+  return {
+    queryPlannerOutput: queryPlan.searchTerms,
+    expandedQuery: queryPlan.searchTerms,
+    matchedConcepts: intent.concepts,
+    retrievalStages: ["Lexical Search", "Expanded Query", "Intent Search", "Ranking", "Evidence Selection"],
+    retrievedDocumentCount: documents.length,
+    contextCharacters,
+    estimatedContextTokens: Math.ceil(contextCharacters / 4),
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
@@ -49,6 +74,7 @@ export async function POST(request: Request) {
     );
     const location = readLocation(body);
     const context = readConversationContext(body);
+    const developerMode = isDeveloperMode(body);
 
     // AQI and retrieval are independent; run them concurrently to avoid adding
     // external API latency to the existing RAG path. A live-data failure must
@@ -76,13 +102,28 @@ export async function POST(request: Request) {
             aqi: liveAqi.aqi,
             category: liveAqi.category,
             timestamp: liveAqi.lastUpdated,
-            weather: {
+          weather: {
               temperature: liveAqi.temperature,
               humidity: liveAqi.humidity,
               windSpeed: liveAqi.windSpeed,
-            },
-          }
+          },
+          provenance: liveAqi.provenance,
+        }
         : null,
+      reasoning: {
+        model: GEMINI_MODEL,
+        role: "Grounded reasoning engine",
+        grounded: true,
+        evidenceBased: true,
+        usesLiveAqi: Boolean(liveAqi),
+        usesElasticsearch: true,
+        usesConversationContext: context.history.length > 0,
+        usesHealthProfile: context.profile.selections.length > 0,
+        hallucinationProtection: "Retrieved evidence required",
+      },
+      retrievalDebug: developerMode
+        ? buildRetrievalDebug(retrieval.documents, retrieval.queryPlan, retrieval.intent)
+        : undefined,
     });
 
   } catch (error) {

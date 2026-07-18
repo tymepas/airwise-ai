@@ -224,6 +224,19 @@ export async function getLiveAqi(location?: AqiLocation): Promise<LiveAqi> {
     dataSource: "Open-Meteo / CAMS",
     timeline: createTimeline(airQuality, lastUpdated),
     healthScore: healthScoreFor(aqi, pm25, humidity, temperature),
+    provenance: {
+      provider: "Open-Meteo Air Quality API",
+      weatherProvider: "Open-Meteo Weather API",
+      airQualityModel: "CAMS",
+      retrievedAt: new Date().toISOString(),
+      responseTimestamp: lastUpdated,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      updateFrequency: "Up to every 5 minutes",
+      status: "Live",
+      airQualityEndpoint: airQualityUrl.toString(),
+      weatherEndpoint: weatherUrl.toString(),
+    },
   };
 
   aqiCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });

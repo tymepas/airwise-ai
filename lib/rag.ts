@@ -23,11 +23,15 @@ export interface GuidelineDocument {
 type RetrievalStage = "lexical" | "expanded" | "intent" | "fallback";
 
 export interface RetrievedGuideline extends GuidelineDocument {
+  documentId: string;
   retrieval: {
     matchedBecause: string[];
+    matchedKeywords: string[];
     matchedConcepts: string[];
     relevanceScore: number;
+    similarityScore: number;
     stages: RetrievalStage[];
+    retrievedAt: string;
   };
 }
 
@@ -173,6 +177,7 @@ function isGuidelineDocument(value: unknown): value is GuidelineDocument {
 
 interface SearchCandidate {
   document: GuidelineDocument;
+  documentId: string;
   score: number;
   stage: RetrievalStage;
 }
@@ -216,7 +221,7 @@ async function searchStage(
 
   return result.hits.hits.flatMap((hit) =>
     isGuidelineDocument(hit._source)
-      ? [{ document: hit._source, score: hit._score ?? 0, stage }]
+      ? [{ document: hit._source, documentId: hit._id ?? documentKey(hit._source), score: hit._score ?? 0, stage }]
       : []
   );
 }
@@ -259,6 +264,7 @@ function rankCandidates(
     const titleWords = normalizedWords(document.title);
     const exactTitleMatches = [...questionWords].filter((word) => titleWords.has(word)).length;
     const exactContentMatches = [...questionWords].filter((word) => searchableText.includes(word)).length;
+    const matchedKeywords = [...questionWords].filter((word) => searchableText.includes(word)).slice(0, 8);
     const exactTitlePhrase = document.title.toLowerCase().includes(question.toLowerCase());
     const matchedConcepts = intent.concepts.filter((concept) =>
       conceptVocabulary.get(concept)?.some((term) => searchableText.includes(term.toLowerCase()))
@@ -282,11 +288,15 @@ function rankCandidates(
 
     return {
       ...document,
+      documentId: matches[0].documentId,
       retrieval: {
         matchedBecause: uniqueTerms(matchedBecause, 4),
+        matchedKeywords,
         matchedConcepts,
         relevanceScore,
+        similarityScore: Math.round(elasticScore * 100) / 100,
         stages,
+        retrievedAt: new Date().toISOString(),
       },
     };
   });
@@ -421,8 +431,14 @@ export function buildEvidence(documents: RetrievedGuideline[]): EvidenceItem[] {
     excerpt: document.content.length > 220 ? `${document.content.slice(0, 217)}...` : document.content,
     relevance: document.retrieval.matchedBecause.join("; "),
     matchedBecause: document.retrieval.matchedBecause,
+    matchedKeywords: document.retrieval.matchedKeywords,
     matchedConcepts: document.retrieval.matchedConcepts,
     relevanceScore: document.retrieval.relevanceScore,
+    category: document.category,
+    documentId: document.documentId,
+    index: HEALTH_GUIDELINES_INDEX,
+    retrievedAt: document.retrieval.retrievedAt,
+    similarityScore: document.retrieval.similarityScore,
   }));
 }
 

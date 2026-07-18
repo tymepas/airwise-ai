@@ -85,6 +85,9 @@ async function planQuery(question: string, retry = false): Promise<QueryPlan> {
       config: {
         temperature: 0,
         maxOutputTokens: 180,
+        // Query planning is a short structured task. Reserving tokens for
+        // thinking can otherwise leave no tokens for the required JSON output.
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: queryPlanSchema,
       },
@@ -231,6 +234,9 @@ export async function generateHealthAnswer(question: string, documents: Guidelin
     config: {
       temperature: 0.1,
       maxOutputTokens: 500,
+      // This response is schema-constrained and must always return JSON for
+      // the API contract; do not consume its output budget on hidden thinking.
+      thinkingConfig: { thinkingBudget: 0 },
       responseMimeType: "application/json",
       responseSchema: answerSchema,
     },

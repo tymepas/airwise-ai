@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AnswerIntelligence } from '@/components/answer-intelligence';
+import { HealthProfileCard } from '@/components/health-profile-card';
+import { LiveAqiCard } from '@/components/live-aqi-card';
+import type { AqiLocation } from '@/lib/aqi-types';
+import type { ChatRequestContext, EvidenceItem, Explainability } from '@/lib/chat-types';
+import type { HealthProfile } from '@/lib/health-profile';
+import { normalizeHealthProfile } from '@/lib/health-profile';
 
 interface ChatResponse {
   success: boolean;
@@ -8,6 +15,20 @@ interface ChatResponse {
   reason: string;
   actions: string[];
   sources: string[];
+  explainability?: Explainability;
+  evidence?: EvidenceItem[];
+  liveData?: {
+    city: string;
+    aqi: number;
+    category: string;
+    timestamp: string;
+    weather: {
+      temperature: number | null;
+      humidity: number | null;
+      windSpeed: number | null;
+    };
+  } | null;
+  error?: string;
 }
 
 type DecisionTone = 'green' | 'red' | 'yellow' | 'blue';
@@ -65,6 +86,24 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ChatResponse | null>(null);
+  const [location, setLocation] = useState<AqiLocation>({ city: 'Delhi' });
+  const [profile, setProfile] = useState<HealthProfile>({ selections: [] });
+  const [history, setHistory] = useState<ChatRequestContext['history']>([]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const storedProfile = window.localStorage.getItem('airwise-health-profile');
+      if (!storedProfile) return;
+
+      try {
+        setProfile(normalizeHealthProfile(JSON.parse(storedProfile)));
+      } catch {
+        window.localStorage.removeItem('airwise-health-profile');
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const tone = useMemo(
     () => (result ? getDecisionTone(result.decision) : 'blue'),
@@ -77,6 +116,7 @@ export default function Home() {
       return;
     }
 
+    const userQuestion = question.trim();
     setLoading(true);
     setError(null);
     setResult(null);
@@ -87,20 +127,30 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: question }),
+        body: JSON.stringify({
+          message: userQuestion,
+          location,
+          profile,
+          history,
+        }),
       });
 
-      if (!res.ok) {
-        throw new Error('Something went wrong while contacting AirWise AI.');
-      }
-
       const data: ChatResponse = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Something went wrong while contacting AirWise AI.');
+      }
 
       if (!data.success) {
         throw new Error('AirWise AI could not process this request.');
       }
 
       setResult(data);
+      setHistory((previousHistory) =>
+        [
+          ...previousHistory,
+          { question: userQuestion, decision: data.decision, reason: data.reason },
+        ].slice(-4)
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -116,6 +166,11 @@ export default function Home() {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       handleAsk();
     }
+  };
+
+  const handleProfileChange = (nextProfile: HealthProfile) => {
+    setProfile(nextProfile);
+    window.localStorage.setItem('airwise-health-profile', JSON.stringify(nextProfile));
   };
 
   const toneStyle = TONE_STYLES[tone];
@@ -160,7 +215,11 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="w-full max-w-3xl mt-14 rounded-3xl bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-100 p-6 sm:p-10">
+      <LiveAqiCard onLocationChange={setLocation} />
+
+      <HealthProfileCard profile={profile} onChange={handleProfileChange} />
+
+      <div className="w-full max-w-3xl mt-8 rounded-3xl bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-100 p-6 sm:p-10">
         <label
           htmlFor="question"
           className="block text-sm font-semibold text-slate-700 mb-3"
@@ -311,6 +370,13 @@ export default function Home() {
               </ul>
             </div>
           )}
+
+          <AnswerIntelligence
+            explainability={result.explainability}
+            evidence={result.evidence}
+            liveData={result.liveData}
+            profile={profile}
+          />
 
           {result.sources && result.sources.length > 0 && (
             <div className="rounded-3xl bg-white/70 backdrop-blur-xl border border-white shadow-lg p-8 sm:p-10">
